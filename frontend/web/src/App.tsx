@@ -4,6 +4,7 @@ import { DonorDashboard } from './components/DonorDashboard';
 import { AdminDashboard } from './components/AdminDashboard';
 import { t, LANGUAGES } from './i18n';
 import type { LangCode } from './i18n';
+import { BlockchainService } from './utils/BlockchainService';
 
 type Role = 'landing' | 'ngo' | 'donor' | 'admin';
 interface User { name: string; email: string; id: string; role: Role; }
@@ -32,6 +33,12 @@ export default function App() {
     // Load dummy session
     const saved = localStorage.getItem('trustchain_session');
     if (saved) setUser(JSON.parse(saved));
+
+    // Initialize blockchain
+    BlockchainService.init().then(connected => {
+      if (connected) console.log("Blockchain wallet connected");
+      else console.log("Blockchain wallet not found");
+    });
   }, [dark]);
 
   const handleDummyLogin = () => {

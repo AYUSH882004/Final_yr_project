@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
 import { supabase } from '../supabase';
+import { BlockchainService } from '../utils/BlockchainService';
 
 interface Milestone { title: string; amount: string; description: string; targetDate: string; gps: boolean; photo: boolean; video: boolean; bill: boolean; }
 
@@ -56,6 +56,20 @@ export const CreateDriveForm: React.FC<Props> = ({ onSuccess }) => {
         urgency_level: urgency, raised_amount: 0,
       }).select().single();
       if (dErr) throw dErr;
+
+      // Blockchain integration
+      let blockchainId = null;
+      try {
+        console.log("Creating on-chain campaign...");
+        blockchainId = await BlockchainService.createCampaign(title, totalTarget || parseFloat(target), milestones.length);
+        console.log("On-chain campaign created with ID:", blockchainId);
+        
+        // Update the drive with the blockchain ID
+        await supabase.from('drives').update({ blockchain_id: Number(blockchainId) }).eq('id', drive.id);
+      } catch (bcErr) {
+        console.error("Blockchain campaign creation failed:", bcErr);
+        // We continue anyway for demo purposes, but in production this should be handled
+      }
 
       if (milestones.length) {
         const mp = milestones.map(m => ({

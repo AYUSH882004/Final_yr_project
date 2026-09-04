@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
 import { supabase } from '../supabase';
+import { BlockchainService } from '../utils/BlockchainService';
 
 interface Props { milestones: any[]; onSuccess: () => void; }
 
@@ -43,6 +43,24 @@ export const ProofSubmissionForm: React.FC<Props> = ({ milestones, onSuccess }) 
       }
       const { error: pErr } = await supabase.from('proofs').insert(inserts);
       if (pErr) throw pErr;
+
+      // Blockchain integration
+      try {
+        const ms = milestones.find(m => m.id === milestoneId);
+        // We need to fetch the drive to get the blockchain_id
+        const { data: drive } = await supabase.from('drives').select('blockchain_id').eq('id', ms.drive_id).single();
+        
+        if (drive && drive.blockchain_id) {
+          console.log("Submitting milestone on-chain...");
+          // We use the first proof URL as the IPFS hash for demo purposes
+          const proofUrl = inserts[0]?.proof_url || 'N/A';
+          await BlockchainService.submitMilestone(drive.blockchain_id, ms.title, proofUrl);
+          console.log("On-chain milestone submitted!");
+        }
+      } catch (bcErr) {
+        console.error("Blockchain milestone submission failed:", bcErr);
+      }
+
       onSuccess();
     } catch (err: any) {
       setError(err.message);

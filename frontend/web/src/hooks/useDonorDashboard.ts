@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase';
 import type { Drive, Milestone } from './useDrives';
+import { BlockchainService } from '../utils/BlockchainService';
 
 interface Donation {
   id: string;
@@ -43,17 +44,47 @@ export const useDonorDashboard = () => {
   const donate = async (driveId: string, amount: number, donorName: string) => {
     setDonating(driveId);
     try {
-      // Increment raised_amount on the drive
       const drive = drives.find(d => d.id === driveId);
       if (!drive) throw new Error('Drive not found');
+
+      let txHash = null;
+      // Blockchain integration
+      if (drive.blockchain_id) {
+        try {
+          console.log("Processing on-chain donation...");
+          // For demo, we use a small amount of ETH if the amount is in INR
+          // Or just pass the amount as string if it's already in ETH
+          const ethAmount = (amount / 100000).toString(); // Rough conversion for demo
+          const receipt = await BlockchainService.donate(drive.blockchain_id, ethAmount);
+          txHash = receipt.hash;
+          console.log("On-chain donation successful, TX:", txHash);
+        } catch (bcErr) {
+          console.error("Blockchain donation failed:", bcErr);
+          // Optional: throw error or continue with just DB update
+        }
+      }
+
+      // Increment raised_amount on the drive
       const newAmount = (drive.raised_amount || 0) + amount;
 
       const { error: updateError } = await supabase
         .from('drives')
-        .update({ raised_amount: newAmount })
+        .update({ 
+          raised_amount: newAmount,
+          // Store txHash in a metadata field or new column if we had it
+        })
         .eq('id', driveId);
 
       if (updateError) throw updateError;
+
+      // Log donation in donations table
+      await supabase.from('donations').insert({
+        drive_id: driveId,
+        amount: amount,
+        donor_id: '00000000-0000-0000-0000-000000000000', // Demo donor
+        transaction_id: txHash || `OFFLINE-${Date.now()}`,
+        status: 'completed'
+      });
 
       // Optimistic update immediately so UI feels instant
       setDrives(prev =>
